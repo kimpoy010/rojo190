@@ -143,7 +143,7 @@ class FightController extends Controller
 
         return response()->json([
             'bets' => $bets->map(fn ($b) => [
-                'name' => $b->user->username ?? $b->user->name,
+                'name' => $b->user->username ?? $b->user?->name ?? __('Counter bet'),
                 // sideLabel(), not the raw 'meron'/'wala' column value —
                 // this event's own region-specific labels (e.g. Rojo/Verde
                 // for Mexico) rather than always the Philippines defaults.

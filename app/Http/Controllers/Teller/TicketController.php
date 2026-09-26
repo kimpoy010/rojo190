@@ -8,6 +8,7 @@ use App\Models\Event;
 use App\Models\Fight;
 use App\Services\AdminPinService;
 use App\Services\BettingService;
+use App\Services\CombinedBettingService;
 use App\Services\TellerShiftService;
 use App\Support\GameTheme;
 use App\Support\PoolPayoutCalculator;
@@ -16,6 +17,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * The "bet writer" flow: a teller takes a cash bet from a walk-up bettor
@@ -27,6 +29,7 @@ class TicketController extends Controller
 {
     public function __construct(
         private BettingService $bettingService,
+        private CombinedBettingService $combinedBettingService,
         private TellerShiftService $shiftService,
         private AdminPinService $adminPinService,
     ) {}
@@ -85,7 +88,7 @@ class TicketController extends Controller
      * Ticket history for the active event, newest fight first — lets a
      * teller reprint or void a ticket without knowing its code.
      *
-     * @return \Illuminate\Support\Collection<int, Bet>
+     * @return Collection<int, Bet>
      */
     private function historyFor(Event $event, int $limit = 100)
     {
@@ -114,11 +117,18 @@ class TicketController extends Controller
         }
 
         $game = $fight->event->game;
-        $meronPool = (float) Bet::inPool()->where('fight_id', $fight->id)->where('side', 'meron')->sum('amount');
-        $walaPool = (float) Bet::inPool()->where('fight_id', $fight->id)->where('side', 'wala')->sum('amount');
-        $drawPool = (float) Bet::inPool()->where('fight_id', $fight->id)->where('side', 'draw')->sum('amount');
+        // A combined fight also carries fixed-odds bets (odds_tier_id set)
+        // in the same bets table — those belong to a separate pool and
+        // must not be mixed into the teller's totalizer figures here.
+        $meronPool = (float) Bet::inPool()->whereNull('odds_tier_id')->where('fight_id', $fight->id)->where('side', 'meron')->sum('amount');
+        $walaPool = (float) Bet::inPool()->whereNull('odds_tier_id')->where('fight_id', $fight->id)->where('side', 'wala')->sum('amount');
+        $drawPool = (float) Bet::inPool()->whereNull('odds_tier_id')->where('fight_id', $fight->id)->where('side', 'draw')->sum('amount');
         $plasada = $game ? (float) $game->plasada : 5.00;
-        $plasadaMode = $game?->plasada_mode ?? 'total_pool';
+        // CombinedBettingService always settles the pool subset in
+        // 'total_pool' mode regardless of the game's plasada_mode setting
+        // (see settleBets()) — mirror that here so the teller's live
+        // payout preview matches what actually gets paid.
+        $plasadaMode = $game?->isCombined() ? 'total_pool' : ($game?->plasada_mode ?? 'total_pool');
 
         return [
             'meronPool' => $meronPool,
@@ -171,7 +181,9 @@ class TicketController extends Controller
         }
 
         try {
-            $bet = $this->bettingService->placeCounterBet(auth()->user(), $shift, $fight, $data['side'], (float) $data['amount']);
+            $bet = $event->game?->isCombined()
+                ? $this->combinedBettingService->placeCounterBet(auth()->user(), $shift, $fight, $data['side'], (float) $data['amount'])
+                : $this->bettingService->placeCounterBet(auth()->user(), $shift, $fight, $data['side'], (float) $data['amount']);
         } catch (\InvalidArgumentException $e) {
             if ($wantsJson) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
@@ -196,19 +208,13 @@ class TicketController extends Controller
     /**
      * The single event the declarator currently has live — the bet-writer
      * flow has no per-teller event picker, it always writes against this
-     * one. Restricted to a non-combined game: counter/ticket betting has
-     * no support in CombinedBettingService (no odds_tier_id/matched/
-     * unmatched semantics, no ticket redemption path for it) — writing
-     * one against a combined fight crashes settlement later. If the only
-     * live event right now is a combined one, the bet-writer simply has
-     * nothing to write against, same as if nothing were live at all.
+     * one. A Combined Sabong event is eligible too: store() routes it
+     * through CombinedBettingService::placeCounterBet(), which only ever
+     * writes a pool-mode ticket (no odds tier picker in this UI).
      */
     private function activeEvent(): ?Event
     {
-        return Event::where('status', 'live')
-            ->whereHas('game', fn ($q) => $q->where(fn ($qq) => $qq->whereNull('game_type')->orWhere('game_type', '!=', 'combined')))
-            ->latest('id')
-            ->first();
+        return Event::where('status', 'live')->latest('id')->first();
     }
 
     public function receipt(Request $request, Bet $bet): View|JsonResponse

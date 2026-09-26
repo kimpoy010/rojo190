@@ -8,6 +8,7 @@ use App\Models\BetMatch;
 use App\Models\Fight;
 use App\Models\Game;
 use App\Models\OddsTier;
+use App\Models\TellerShift;
 use App\Models\User;
 use App\Support\Broadcaster;
 use App\Support\PoolPayoutCalculator;
@@ -173,6 +174,106 @@ class CombinedBettingService
         ]);
 
         return $bet;
+    }
+
+    /**
+     * Write an over-the-counter bet ticket against a combined fight —
+     * pool mode only, same as a teller-written Pool Sabong ticket
+     * (BettingService::placeCounterBet). No odds-mode ticket support:
+     * the teller UI has no tier picker, and matched-bet order-matching
+     * has no natural fit for a cash ticket anyway. A counter bet always
+     * carries odds_tier_id = null, so every downstream combined
+     * settlement path (pool subset, draw subset, refunds, reversal) —
+     * already isCounterBet()-aware — handles it exactly like a real
+     * player's pool bet, just with no wallet to credit.
+     */
+    public function placeCounterBet(User $teller, TellerShift $shift, Fight $fight, string $side, float $amount): Bet
+    {
+        if (! $fight->isBettable()) {
+            throw new \InvalidArgumentException(__('Bets can only be placed on open fights.'));
+        }
+
+        if ($fight->event->status !== 'live') {
+            throw new \InvalidArgumentException(__('Bets can only be placed on live events.'));
+        }
+
+        if ($side === 'draw' && ! $fight->draw_enabled) {
+            throw new \InvalidArgumentException(__('Draw betting is not enabled for this fight.'));
+        }
+
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException(__('Bet amount must be positive.'));
+        }
+
+        $game = $fight->event->game;
+
+        $bet = DB::transaction(function () use ($teller, $shift, $fight, $side, $amount, $game) {
+            $freshFight = Fight::lockForUpdate()->find($fight->id);
+            if (! $freshFight->isBettable()) {
+                throw new \InvalidArgumentException(__('Bets can only be placed on open fights.'));
+            }
+
+            if ($side === 'draw' && $game && $game->max_draw_bet > 0) {
+                $existingDraw = Bet::where('fight_id', $freshFight->id)
+                    ->where('side', 'draw')
+                    ->whereNotIn('status', ['refunded', 'cancelled'])
+                    ->sum('amount');
+                $remaining = (float) $game->max_draw_bet - (float) $existingDraw;
+                if ($amount > $remaining) {
+                    throw new \InvalidArgumentException($remaining > 0
+                        ? __(':remaining remaining in the draw pool (limit :limit).', ['remaining' => '$'.number_format($remaining, 2), 'limit' => '$'.number_format((float) $game->max_draw_bet, 0)])
+                        : __('The draw pool limit of :limit has been reached.', ['limit' => '$'.number_format((float) $game->max_draw_bet, 0)]));
+                }
+            }
+
+            return Bet::create([
+                'user_id' => null,
+                'fight_id' => $freshFight->id,
+                'odds_tier_id' => null,
+                'side' => $side,
+                'amount' => $amount,
+                'matched_amount' => $amount,
+                'unmatched_amount' => 0,
+                'status' => 'matched',
+                'placed_by_teller_id' => $teller->id,
+                'placed_teller_shift_id' => $shift->id,
+                'ticket_code' => $this->generateTicketCode(),
+            ]);
+        });
+
+        Cache::forget("combined.fight.{$fight->id}.totals");
+
+        $this->broadcastPoolUpdate($fight, $game, [
+            'name' => 'Counter bet',
+            'side' => $bet->side,
+            'mode' => 'pool',
+            'amount' => number_format($amount),
+            'time' => $bet->created_at->format('H:i:s'),
+        ]);
+
+        return $bet;
+    }
+
+    /**
+     * A plain sequential number (zero-padded to 10 digits), same format
+     * and shared `ticket_sequences` counter as BettingService's own
+     * generator — one global ticket-number sequence across every game,
+     * so a teller never sees two different tickets with the same code
+     * regardless of which game wrote them.
+     */
+    private function generateTicketCode(): string
+    {
+        $row = DB::table('ticket_sequences')->lockForUpdate()->find(1);
+
+        if (! $row) {
+            DB::table('ticket_sequences')->insert(['id' => 1, 'next_value' => 2]);
+            $next = 1;
+        } else {
+            $next = (int) $row->next_value;
+            DB::table('ticket_sequences')->where('id', 1)->update(['next_value' => $next + 1]);
+        }
+
+        return str_pad((string) $next, 10, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -425,7 +526,12 @@ class CombinedBettingService
         if ($payoutRatio < 1.0) {
             $poolBetsQuery()->with('user.wallet')->lockForUpdate()->get()->each(function (Bet $bet) use ($fight) {
                 if ($bet->isCounterBet()) {
-                    $bet->update(['status' => 'refunded', 'payout' => $bet->amount]);
+                    // No wallet to credit — mark it 'settled' (not
+                    // 'refunded') with payout = stake so it's redeemable
+                    // for cash at the counter, same as every other
+                    // counter-bet refund path in this service (e.g. the
+                    // draw-refund branch above).
+                    $bet->update(['status' => 'settled', 'payout' => $bet->amount]);
 
                     return;
                 }
