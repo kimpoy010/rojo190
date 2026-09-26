@@ -71,6 +71,18 @@
     body *:not(.printable.print-active):not(.printable.print-active *):not(:has(.printable.print-active)) {
         display: none !important;
     }
+    /* An ancestor that's kept around only because it contains the
+       printable element (e.g. the receipt modal's `fixed inset-0 flex
+       items-center justify-center px-4` backdrop on the ticket-writer
+       page) still carries its on-screen layout — position:fixed, flex
+       centering, padding — which fights the print page's own box instead
+       of it, pushing the receipt off-center/to one side. Strip all of
+       that back to plain block flow so nothing but .printable.print-
+       active's own centering below decides its position. */
+    body *:has(.printable.print-active) {
+        all: unset;
+        display: block !important;
+    }
     .printable.print-active {
         margin: 0 auto;
         width: 80mm;
