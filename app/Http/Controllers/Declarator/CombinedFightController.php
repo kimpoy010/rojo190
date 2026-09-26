@@ -31,6 +31,32 @@ class CombinedFightController extends Controller
         private CombinedBettingService $bettingService,
     ) {}
 
+    /**
+     * Closing bets is otherwise game-agnostic (declarator.fights.close
+     * works fine for a combined fight's status transition alone) — the
+     * one thing combined needs afterward that pool-sabong doesn't is
+     * refunding the unmatched portion of odds-mode bets nobody ever took
+     * the other side of, so that stake isn't silently forfeited at
+     * settlement. Hence this fight's Close bets button routes here
+     * instead of the shared close action, purely to add that one step.
+     */
+    public function close(Fight $fight): JsonResponse|RedirectResponse
+    {
+        try {
+            $closedFight = DB::transaction(function () use ($fight) {
+                $closed = $this->fightService->closeBets($fight);
+                $this->bettingService->refundUnmatched($closed);
+
+                return $closed;
+            });
+            Broadcaster::send(new FightStatusUpdated($closedFight->fresh()));
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail($fight, $e->getMessage());
+        }
+
+        return $this->ok($fight, __('Bets closed.'));
+    }
+
     public function declare(Request $request, Fight $fight): JsonResponse|RedirectResponse
     {
         $request->validate(['winner' => 'required|in:meron,wala,draw']);

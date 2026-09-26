@@ -83,10 +83,16 @@ class LoginController extends Controller
             return route($user->homeRouteName());
         }
 
-        $event = Event::where('status', 'live')->orderBy('date')->first();
+        $event = Event::with('game')->where('status', 'live')->orderBy('date')->first();
         $fight = $event?->currentFight()->first();
 
-        return $fight ? route('play.pool-fight', $fight) : route('play.index');
+        if (! $fight) {
+            return route('play.index');
+        }
+
+        return $event->game?->isCombined()
+            ? route('play.combined-fight', $fight)
+            : route('play.pool-fight', $fight);
     }
 
     public function logout(Request $request): RedirectResponse

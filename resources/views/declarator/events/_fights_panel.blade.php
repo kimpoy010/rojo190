@@ -7,6 +7,7 @@
     // unchanged. Nothing else on this panel (open/last-call/close/
     // toggle-draw/cockpit/fight-number/bets) differs by game type.
     $isCombined = $event->game?->isCombined() ?? false;
+    $closeRouteName = $isCombined ? 'declarator.combined-fights.close' : 'declarator.fights.close';
     $declareRouteName = $isCombined ? 'declarator.combined-fights.declare' : 'declarator.fights.declare';
     $cancelRouteName = $isCombined ? 'declarator.combined-fights.cancel' : 'declarator.fights.cancel';
     $redeclareRouteName = $isCombined ? 'declarator.combined-fights.redeclare' : 'declarator.fights.redeclare';
@@ -146,7 +147,7 @@
                         {{-- Gated behind Last call — never shown on a merely
                              'open' fight, so betting can't be cut short
                              without that warning stage first. --}}
-                        <form data-ajax method="POST" action="{{ route('declarator.fights.close', $fight) }}" class="fight-action" data-visible-when="last_call">
+                        <form data-ajax method="POST" action="{{ route($closeRouteName, $fight) }}" class="fight-action" data-visible-when="last_call">
                             @csrf
                             <button class="rounded-lg bg-amber-600 hover:bg-amber-500 transition font-semibold px-4 py-2 text-sm">{{ __('Close bets') }}</button>
                         </form>

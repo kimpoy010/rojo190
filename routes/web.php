@@ -137,6 +137,7 @@ Route::middleware(['auth', 'role:declarator|superadmin'])->prefix('declarator')-
     // CombinedSabong only — everything else about a fight's lifecycle
     // (open/last-call/close/toggle-draw/cockpit/fight-number/bets above)
     // is game-agnostic and shared as-is; only settlement differs.
+    Route::post('/combined-fights/{fight}/close', [DeclaratorCombinedFightController::class, 'close'])->name('combined-fights.close');
     Route::post('/combined-fights/{fight}/declare', [DeclaratorCombinedFightController::class, 'declare'])->name('combined-fights.declare');
     Route::post('/combined-fights/{fight}/cancel', [DeclaratorCombinedFightController::class, 'cancel'])->name('combined-fights.cancel');
     Route::post('/combined-fights/{fight}/redeclare', [DeclaratorCombinedFightController::class, 'redeclare'])->name('combined-fights.redeclare');
