@@ -110,6 +110,24 @@
         </button>
     @endif
 
+    <!-- My unmatched odds bets — only a bet still sitting on the order
+         book (nobody's taken the other side yet, in full) can be
+         cancelled; a matched bet is locked in. -->
+    @if ($myUnmatchedBets->isNotEmpty())
+        <div id="my-unmatched-bets" class="rounded-xl bg-slate-900 border border-slate-800 divide-y divide-slate-800">
+            <div class="px-4 py-2 text-[11px] font-bold uppercase text-slate-500">{{ __('My unmatched odds bets') }}</div>
+            @foreach ($myUnmatchedBets as $bet)
+                <div class="flex items-center justify-between px-4 py-2.5 text-sm" data-unmatched-bet-row="{{ $bet->id }}">
+                    <span class="capitalize">
+                        {{ $bet->side }} @ {{ rtrim(rtrim((string) $bet->oddsTier->meron_ratio, '0'), '.') }}-{{ rtrim(rtrim((string) $bet->oddsTier->wala_ratio, '0'), '.') }}
+                        <span class="text-slate-500">({{ $currency }}{{ number_format($bet->unmatched_amount, 2) }} unmatched)</span>
+                    </span>
+                    <button type="button" class="cancel-unmatched-bet text-xs text-red-400 hover:underline" data-bet-id="{{ $bet->id }}">{{ __('Cancel') }}</button>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     <!-- Status panel -->
     <div class="rounded-xl bg-slate-900 border border-slate-800 px-4 py-4 text-center" id="fight-status-panel">
         <div class="font-bold uppercase text-sm {{ $fight->status === 'open' ? 'text-emerald-400' : 'text-amber-400' }}" id="fight-status-label">{{ $statusCopy['label'] }}</div>
@@ -241,6 +259,36 @@
             });
         });
     }
+
+    document.querySelectorAll('.cancel-unmatched-bet').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const betId = btn.dataset.betId;
+            const cancelUrl = @json(route('play.combined-cancel-bet', ['fight' => $fight, 'bet' => '__BET_ID__'])).replace('__BET_ID__', betId);
+
+            btn.disabled = true;
+            fetch(cancelUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+            })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok || !data.success) {
+                        Swal.fire({ title: '{{ __('Could not cancel bet') }}', text: data.message || '{{ __('Something went wrong.') }}', icon: 'error', confirmButtonColor: '#dc2626', ...swalDark });
+                        btn.disabled = false;
+                        return;
+                    }
+                    const row = document.querySelector(`[data-unmatched-bet-row="${betId}"]`);
+                    if (row) row.remove();
+                    const container = document.getElementById('my-unmatched-bets');
+                    if (container && !container.querySelector('[data-unmatched-bet-row]')) container.remove();
+                    poll();
+                })
+                .catch(() => {
+                    Swal.fire({ title: '{{ __('Network error') }}', text: '{{ __('Could not reach the server. Please try again.') }}', icon: 'error', confirmButtonColor: '#dc2626', ...swalDark });
+                    btn.disabled = false;
+                });
+        });
+    });
 
     function applyStatus(data) {
         document.getElementById('fight-status-badge').textContent = (statusCopy[data.status] || [data.status.toUpperCase()])[0];

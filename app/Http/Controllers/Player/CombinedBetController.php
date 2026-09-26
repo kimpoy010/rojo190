@@ -38,7 +38,13 @@ class CombinedBetController extends Controller
         $myBets = auth()->user()->bets()
             ->where('fight_id', $fight->id)
             ->whereNotIn('status', ['refunded', 'cancelled'])
+            ->with('oddsTier')
             ->get();
+
+        // Odds-mode bets of mine still sitting on the order book with an
+        // unmatched portion — the only kind cancelBet() actually applies
+        // to (pool/draw bets are always fully matched at placement).
+        $myUnmatchedBets = $myBets->where('unmatched_amount', '>', 0);
 
         [$poolTotals, $payouts] = $this->poolTotals($fight, $game);
         $tierTotals = $this->tierTotals($fight);
@@ -72,6 +78,7 @@ class CombinedBetController extends Controller
             'myWalaPool' => $myWalaPool,
             'myDrawBet' => $myDrawBet,
             'myTierBets' => $myTierBets,
+            'myUnmatchedBets' => $myUnmatchedBets,
             'drawMultiplier' => $drawMultiplier,
             'maxDrawBet' => $maxDrawBet,
             'drawPool' => $drawPool,
