@@ -50,21 +50,30 @@
    (e.g. the original ticket and its payout receipt on the same lookup
    page) — .print-active picks out which one this particular print is for;
    see printOnly() in show.blade.php. Pages with only one .printable mark
-   it active by default so their existing "print" buttons need no JS. */
+   it active by default so their existing "print" buttons need no JS.
+   Hiding everything else with `visibility: hidden` (the previous approach)
+   keeps its layout HEIGHT — the rest of the SPA (nav, the ticket-writer
+   form, the history table, etc.) is easily taller than one 80mm slip, so
+   the browser paginated the print job into multiple pages, and the
+   `position: absolute` receipt (anchored to the page box, same as a fixed
+   header) got re-stamped on every one of them — the ticket printing
+   "double" (or more) on paper. `display: none` removes those elements
+   from layout entirely instead, so there's only ever one page's worth of
+   content to print. `:has()` lets this collapse everything EXCEPT the
+   printable element's own ancestor chain, without needing to know that
+   chain's exact structure on every page that includes it (a modal wrapper
+   on the ticket-writer page, a plain include elsewhere). */
 @media print {
-    body * {
-        visibility: hidden;
+    @page {
+        size: 80mm auto;
+        margin: 0;
     }
-    .printable.print-active,
-    .printable.print-active * {
-        visibility: visible;
+    body *:not(.printable.print-active):not(.printable.print-active *):not(:has(.printable.print-active)) {
+        display: none !important;
     }
     .printable.print-active {
-        position: absolute;
-        top: 0;
-        left: 0;
+        margin: 0 auto;
         width: 80mm;
-        margin: 0;
         padding: 8px;
     }
 }
