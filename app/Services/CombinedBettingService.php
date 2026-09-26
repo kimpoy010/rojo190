@@ -279,8 +279,9 @@ class CombinedBettingService
             ->first();
 
         $plasada = $game ? (float) $game->plasada : 5.00;
-        $plasadaMode = $game?->plasada_mode ?? 'total_pool';
-        $payouts = PoolPayoutCalculator::calculate((float) $poolTotals->meron, (float) $poolTotals->wala, $plasada, $plasadaMode);
+        // Fixed 'total_pool' for the pool subset — see settleBets()'s
+        // own comment on why this isn't Game::plasada_mode.
+        $payouts = PoolPayoutCalculator::calculate((float) $poolTotals->meron, (float) $poolTotals->wala, $plasada, 'total_pool');
 
         $tierTotals = Bet::where('fight_id', $fight->id)
             ->whereNotNull('odds_tier_id')
@@ -337,10 +338,16 @@ class CombinedBettingService
 
             $poolPlasada = (float) ($game->plasada ?? 5.00);
             $oddsPlasada = (float) ($game->odds_plasada ?? $game->plasada ?? 5.00);
-            $plasadaMode = $game->plasada_mode ?? 'total_pool';
 
-            $this->settlePoolSubset($fight, $winner, $poolPlasada, $plasadaMode);
-            $this->settleOddsSubset($fight, $winner, $oddsPlasada, $plasadaMode);
+            // Fixed by design, not superadmin-configurable for this game:
+            // the pool/totalizer subset always rakes the combined pool
+            // ('total_pool'), the odds/fixed subset always rakes only the
+            // losing side ('losing_side') — see Game::plasada_mode's own
+            // doc comment for what each mode means. Game::plasada_mode
+            // itself is unused here; it only ever applied to a whole
+            // fight at once, which doesn't fit a game with two subsets.
+            $this->settlePoolSubset($fight, $winner, $poolPlasada, 'total_pool');
+            $this->settleOddsSubset($fight, $winner, $oddsPlasada, 'losing_side');
             $this->settleDrawSubset($fight, $winner, $game);
         });
     }

@@ -192,8 +192,10 @@ class CombinedBetController extends Controller
             ->whereNotIn('status', ['refunded', 'cancelled'])->sum('amount');
 
         $plasada = $game ? (float) $game->plasada : 5.00;
-        $plasadaMode = $game?->plasada_mode ?? 'total_pool';
-        $payouts = PoolPayoutCalculator::calculate($meron, $wala, $plasada, $plasadaMode);
+        // Fixed 'total_pool' for the pool subset — see
+        // CombinedBettingService::settleBets()'s own comment on why
+        // this isn't Game::plasada_mode.
+        $payouts = PoolPayoutCalculator::calculate($meron, $wala, $plasada, 'total_pool');
 
         return [['meron' => $meron, 'wala' => $wala], $payouts];
     }

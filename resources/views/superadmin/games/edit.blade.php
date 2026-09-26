@@ -51,13 +51,21 @@
         <label class="block text-sm text-slate-400 mb-1">{{ __('Plasada (house rake %)') }}</label>
         <input type="number" step="0.01" name="plasada" value="{{ old('plasada', $game->plasada) }}" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
     </div>
-    <div>
-        <label class="block text-sm text-slate-400 mb-1">{{ __('Plasada mode') }}</label>
-        <select name="plasada_mode" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
-            <option value="total_pool" @selected($game->plasada_mode === 'total_pool')>{{ __('Total pool') }}</option>
-            <option value="losing_side" @selected($game->plasada_mode === 'losing_side')>{{ __('Losing side only') }}</option>
-        </select>
-    </div>
+    @if ($game->isCombined())
+        {{-- Fixed by design for this game, not a setting — the pool/
+             totalizer subset always rakes the combined pool, the odds/
+             fixed subset always rakes only the losing side. See
+             CombinedBettingService::settleBets()'s own comment. --}}
+        <p class="text-xs text-slate-500">{{ __('Plasada mode: Pool bets always rake the total pool; Fixed odds always rakes the losing side only — not configurable for this game.') }}</p>
+    @else
+        <div>
+            <label class="block text-sm text-slate-400 mb-1">{{ __('Plasada mode') }}</label>
+            <select name="plasada_mode" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
+                <option value="total_pool" @selected($game->plasada_mode === 'total_pool')>{{ __('Total pool') }}</option>
+                <option value="losing_side" @selected($game->plasada_mode === 'losing_side')>{{ __('Losing side only') }}</option>
+            </select>
+        </div>
+    @endif
     <div>
         <label class="block text-sm text-slate-400 mb-1">{{ __('Draw multiplier') }}</label>
         <input type="number" step="0.01" name="draw_multiplier" value="{{ old('draw_multiplier', $game->draw_multiplier) }}" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">

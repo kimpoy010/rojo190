@@ -31,7 +31,9 @@ class GameController extends Controller
             'default_banner' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
             'remove_default_banner' => 'sometimes|boolean',
             'plasada' => 'required|numeric|min:0|max:100',
-            'plasada_mode' => 'required|in:losing_side,total_pool',
+            // CombinedSabong's rake modes are fixed (see the edit view)
+            // and its form submits no plasada_mode field at all.
+            'plasada_mode' => $game->isCombined() ? 'sometimes|in:losing_side,total_pool' : 'required|in:losing_side,total_pool',
             'draw_multiplier' => 'required|numeric|min:0',
             'max_draw_bet' => 'required|numeric|min:0',
             'min_payout_threshold' => 'required|numeric|min:0',
