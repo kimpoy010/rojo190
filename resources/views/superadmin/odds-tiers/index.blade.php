@@ -13,7 +13,7 @@
     @foreach ($oddsTiers as $tier)
         <div class="rounded-xl border border-slate-800 bg-slate-900 p-4" data-tier-row data-tier-id="{{ $tier->id }}">
             <div class="flex items-center gap-3">
-                <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 select-none text-lg leading-none" title="{{ __('Drag to reorder') }}">⠿</span>
+                <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 select-none text-lg leading-none touch-none" style="touch-action: none;" title="{{ __('Drag to reorder') }}">⠿</span>
                 <form method="POST" action="{{ route('superadmin.odds-tiers.update', $tier) }}" class="flex items-center gap-3 flex-1 min-w-0">
                     @csrf
                     @method('PUT')
@@ -53,33 +53,75 @@
 
     const reorderUrl = @json(route('superadmin.odds-tiers.reorder'));
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
-    let dragging = null;
 
-    list.querySelectorAll('[data-tier-row]').forEach(row => {
-        const handle = row.querySelector('.drag-handle');
-        row.draggable = false;
-        handle.addEventListener('mousedown', () => { row.draggable = true; });
-        row.addEventListener('dragend', () => { row.draggable = false; row.classList.remove('opacity-50'); });
+    // Manual pointer-based drag rather than native HTML5 drag-and-drop —
+    // the native API's drag initiation is unreliable across browsers/
+    // trackpads/touch (and doubly so when toggling `draggable` on
+    // mousedown of a child element), so this tracks the pointer directly
+    // and reorders the DOM by comparing Y position against sibling rows.
+    let draggingRow = null;
+    // Everything below is in viewport coordinates (getBoundingClientRect),
+    // consistently, to avoid mixing offset-parent-relative and scroll-
+    // relative coordinate systems.
+    let startY = 0;
+    let origTop = 0;
 
-        row.addEventListener('dragstart', (e) => {
-            dragging = row;
-            row.classList.add('opacity-50');
-            e.dataTransfer.effectAllowed = 'move';
-        });
+    // Move/up listeners live on window, not the handle — pointer capture
+    // isn't reliable enough across browsers/devices (and test tooling) to
+    // depend on the handle itself still receiving events once the cursor
+    // has moved elsewhere, so this tracks the drag globally instead and
+    // only cares which handle started it.
+    function onMove(e) {
+        if (!draggingRow) return;
+        const deltaY = e.clientY - startY;
+        draggingRow.style.transform = `translateY(${deltaY}px)`;
 
-        row.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            if (!dragging || dragging === row) return;
+        const draggingRect = draggingRow.getBoundingClientRect();
+        const visualMidY = origTop + deltaY + draggingRect.height / 2;
+
+        const rows = Array.from(list.querySelectorAll('[data-tier-row]')).filter(r => r !== draggingRow);
+        for (const row of rows) {
             const rect = row.getBoundingClientRect();
-            const before = (e.clientY - rect.top) < rect.height / 2;
-            list.insertBefore(dragging, before ? row : row.nextSibling);
-        });
+            const rowMidY = rect.top + rect.height / 2;
+            const draggingIsAfter = !!(row.compareDocumentPosition(draggingRow) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-        row.addEventListener('drop', (e) => {
+            if (draggingIsAfter && visualMidY < rowMidY) {
+                list.insertBefore(draggingRow, row);
+                origTop = row.getBoundingClientRect().top; // dragging row now sits where `row` was
+                break;
+            }
+            if (!draggingIsAfter && visualMidY > rowMidY) {
+                list.insertBefore(draggingRow, row.nextSibling);
+                origTop = row.getBoundingClientRect().top - draggingRect.height;
+                break;
+            }
+        }
+    }
+
+    function onEnd() {
+        if (!draggingRow) return;
+        draggingRow.style.transform = '';
+        draggingRow.style.position = '';
+        draggingRow.classList.remove('z-10', 'shadow-lg');
+        draggingRow = null;
+        persistOrder();
+    }
+
+    list.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('pointerdown', (e) => {
+            const row = handle.closest('[data-tier-row]');
+            draggingRow = row;
+            startY = e.clientY;
+            origTop = row.getBoundingClientRect().top;
+            row.style.position = 'relative';
+            row.classList.add('z-10', 'shadow-lg');
             e.preventDefault();
-            persistOrder();
         });
     });
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
 
     function persistOrder() {
         const ids = Array.from(list.querySelectorAll('[data-tier-row]')).map(r => r.dataset.tierId);
