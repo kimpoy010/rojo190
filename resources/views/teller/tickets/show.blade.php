@@ -63,6 +63,18 @@
         });
         window.print();
     }
+
+    @if (session('justRedeemed'))
+        // Landed here straight off the "Pay Out" action — auto-print the
+        // payout receipt the same way the write-ticket flow auto-prints
+        // the claim ticket, so the teller doesn't have to click the
+        // "Print payout receipt" button separately. Only fires on this
+        // one redirect (session('justRedeemed') is a one-time flash, not
+        // set on a later plain view of an already-redeemed ticket).
+        window.addEventListener('load', function () {
+            setTimeout(function () { printOnly('printable-receipt'); }, 150);
+        });
+    @endif
 </script>
 @endpush
 @endsection

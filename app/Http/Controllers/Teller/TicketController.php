@@ -311,6 +311,9 @@ class TicketController extends Controller
             return redirect()->route('teller.tickets.show', $bet)->with('error', $e->getMessage());
         }
 
-        return redirect()->route('teller.tickets.show', $bet)->with('success', __('Paid out — ticket redeemed.'));
+        // justRedeemed drives show.blade.php's one-time auto-print of the
+        // payout receipt — only on the redirect right after paying out,
+        // never on a later plain view of an already-redeemed ticket.
+        return redirect()->route('teller.tickets.show', $bet)->with('success', __('Paid out — ticket redeemed.'))->with('justRedeemed', true);
     }
 }
