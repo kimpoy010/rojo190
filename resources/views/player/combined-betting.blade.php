@@ -71,10 +71,10 @@
 
     <!-- Odds panel -->
     <div id="panel-odds" class="hidden bg-[#160e0a] border border-[#2a1a14] rounded-xl overflow-hidden">
-        <div class="grid grid-cols-3 text-center text-[10px] font-bold uppercase text-slate-400 bg-black/30 px-2 py-2">
-            <span>{{ __('Total') }}</span>
-            <span>{{ __('Odds') }}</span>
-            <span>{{ __('Total') }}</span>
+        <div class="grid grid-cols-3 text-center text-[10px] font-bold uppercase">
+            <span class="bg-red-900/40 text-red-300 py-2">{{ $event->sideLabel('meron') }}</span>
+            <span class="bg-black/30 text-slate-400 py-2">{{ __('Odds') }}</span>
+            <span class="bg-blue-900/40 text-blue-300 py-2">{{ $event->sideLabel('wala') }}</span>
         </div>
         <div id="odds-tier-rows" class="divide-y divide-slate-800">
             @forelse ($oddsTiers as $tier)
@@ -82,14 +82,14 @@
                     $t = $tierTotals[$tier->id] ?? ['meron' => 0, 'wala' => 0, 'meron_avail' => 0, 'wala_avail' => 0];
                     $mine = fn ($side) => $myTierBets[$tier->id.'-'.$side] ?? 0;
                 @endphp
-                <div class="grid grid-cols-3 items-center text-center px-2 py-2.5" data-tier-row="{{ $tier->id }}">
-                    <button type="button" class="place-odds-bet flex flex-col items-center gap-0.5" data-side="meron" data-tier="{{ $tier->id }}">
+                <div class="grid grid-cols-3 items-stretch text-center" data-tier-row="{{ $tier->id }}">
+                    <button type="button" class="place-odds-bet flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 bg-red-900/20 hover:bg-red-900/30 transition" data-side="meron" data-tier="{{ $tier->id }}">
                         <span class="text-red-400 font-bold text-sm" data-tier-total="meron">{{ number_format($t['meron'], 0) }}</span>
                         <span class="text-[10px] text-slate-500" data-tier-mine="meron">{{ __('Mine: :amount', ['amount' => number_format($mine('meron'), 0)]) }}</span>
                         <span class="text-[10px] text-emerald-400" data-tier-avail="meron" @if (($t['meron_avail'] ?? 0) <= 0) hidden @endif>{{ __('Avail: :amount', ['amount' => number_format($t['meron_avail'] ?? 0, 0)]) }}</span>
                     </button>
-                    <span class="text-white font-extrabold text-xs">{{ rtrim(rtrim((string) $tier->meron_ratio, '0'), '.') }}-{{ rtrim(rtrim((string) $tier->wala_ratio, '0'), '.') }}</span>
-                    <button type="button" class="place-odds-bet flex flex-col items-center gap-0.5" data-side="wala" data-tier="{{ $tier->id }}">
+                    <span class="flex items-center justify-center text-white font-extrabold text-xs px-2 py-2.5">{{ rtrim(rtrim((string) $tier->meron_ratio, '0'), '.') }}-{{ rtrim(rtrim((string) $tier->wala_ratio, '0'), '.') }}</span>
+                    <button type="button" class="place-odds-bet flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 bg-blue-900/20 hover:bg-blue-900/30 transition" data-side="wala" data-tier="{{ $tier->id }}">
                         <span class="text-blue-400 font-bold text-sm" data-tier-total="wala">{{ number_format($t['wala'], 0) }}</span>
                         <span class="text-[10px] text-slate-500" data-tier-mine="wala">{{ __('Mine: :amount', ['amount' => number_format($mine('wala'), 0)]) }}</span>
                         <span class="text-[10px] text-emerald-400" data-tier-avail="wala" @if (($t['wala_avail'] ?? 0) <= 0) hidden @endif>{{ __('Avail: :amount', ['amount' => number_format($t['wala_avail'] ?? 0, 0)]) }}</span>
