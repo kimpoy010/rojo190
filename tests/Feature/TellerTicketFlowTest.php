@@ -198,7 +198,7 @@ class TellerTicketFlowTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('id="receipt-modal"', false);
-        $response->assertSee("fetch(form.action", false);
+        $response->assertSee('fetch(form.action', false);
     }
 
     public function test_ticket_codes_are_sequential_zero_padded_numbers(): void
@@ -312,7 +312,7 @@ class TellerTicketFlowTest extends TestCase
 
         $response = $this->actingAs($teller)->post(route('teller.tickets.redeem', $ticket));
 
-        $response->assertRedirect(route('teller.tickets.show', $ticket));
+        $response->assertRedirect(route('teller.tickets.show', ['bet' => $ticket, 'paid' => 1]));
         $this->assertNotNull($ticket->fresh()->redeemed_at);
 
         // The ticket page reloads showing the redeemed state, which should
@@ -356,5 +356,125 @@ class TellerTicketFlowTest extends TestCase
 
         $response->assertRedirect(route('teller.shift.start'));
         $this->assertNull($ticket->fresh()->redeemed_at);
+    }
+
+    public function test_quick_redeem_pays_out_a_winning_ticket_in_one_request(): void
+    {
+        $teller = $this->teller();
+        $shift = app(TellerShiftService::class)->startShift($teller, 5000);
+        $fight = $this->fight();
+        $betting = app(BettingService::class);
+
+        $ticket = $betting->placeCounterBet($teller, $shift, $fight, 'meron', 100);
+        $walaBettor = User::factory()->create();
+        Wallet::create(['user_id' => $walaBettor->id, 'main_balance' => 1000]);
+        $betting->placeBet($walaBettor, $fight, 'wala', 100);
+        $fight->update(['status' => 'closed']);
+        $betting->settleBets($fight, 'meron');
+
+        $response = $this->actingAs($teller)->postJson(route('teller.tickets.quickRedeem'), [
+            'code' => $ticket->ticket_code,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['success' => true, 'ticket_code' => $ticket->ticket_code]);
+        $this->assertStringContainsString('id="printable-receipt"', $response->json('receipt_html'));
+        $this->assertNotNull($ticket->fresh()->redeemed_at);
+    }
+
+    public function test_quick_redeem_accepts_the_full_qr_url_a_handheld_scanner_types_out(): void
+    {
+        $teller = $this->teller();
+        $shift = app(TellerShiftService::class)->startShift($teller, 5000);
+        $fight = $this->fight();
+        $betting = app(BettingService::class);
+
+        $ticket = $betting->placeCounterBet($teller, $shift, $fight, 'meron', 100);
+        $walaBettor = User::factory()->create();
+        Wallet::create(['user_id' => $walaBettor->id, 'main_balance' => 1000]);
+        $betting->placeBet($walaBettor, $fight, 'wala', 100);
+        $fight->update(['status' => 'closed']);
+        $betting->settleBets($fight, 'meron');
+
+        $response = $this->actingAs($teller)->postJson(route('teller.tickets.quickRedeem'), [
+            'code' => route('teller.tickets.show', $ticket),
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['success' => true, 'ticket_code' => $ticket->ticket_code]);
+    }
+
+    public function test_quick_redeem_accepts_an_un_padded_numeric_code(): void
+    {
+        $teller = $this->teller();
+        $shift = app(TellerShiftService::class)->startShift($teller, 5000);
+        $fight = $this->fight();
+        $betting = app(BettingService::class);
+
+        $ticket = $betting->placeCounterBet($teller, $shift, $fight, 'meron', 100);
+        $walaBettor = User::factory()->create();
+        Wallet::create(['user_id' => $walaBettor->id, 'main_balance' => 1000]);
+        $betting->placeBet($walaBettor, $fight, 'wala', 100);
+        $fight->update(['status' => 'closed']);
+        $betting->settleBets($fight, 'meron');
+
+        $response = $this->actingAs($teller)->postJson(route('teller.tickets.quickRedeem'), [
+            'code' => (string) (int) $ticket->ticket_code,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['success' => true, 'ticket_code' => $ticket->ticket_code]);
+    }
+
+    public function test_quick_redeem_rejects_a_ticket_that_has_not_settled_yet(): void
+    {
+        $teller = $this->teller();
+        $shift = app(TellerShiftService::class)->startShift($teller, 5000);
+        $fight = $this->fight();
+        $ticket = app(BettingService::class)->placeCounterBet($teller, $shift, $fight, 'meron', 100);
+
+        $response = $this->actingAs($teller)->postJson(route('teller.tickets.quickRedeem'), [
+            'code' => $ticket->ticket_code,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJson(['success' => false]);
+        $this->assertNull($ticket->fresh()->redeemed_at);
+    }
+
+    public function test_quick_redeem_rejects_a_ticket_already_redeemed(): void
+    {
+        $teller = $this->teller();
+        $shift = app(TellerShiftService::class)->startShift($teller, 5000);
+        $fight = $this->fight();
+        $betting = app(BettingService::class);
+
+        $ticket = $betting->placeCounterBet($teller, $shift, $fight, 'meron', 100);
+        $walaBettor = User::factory()->create();
+        Wallet::create(['user_id' => $walaBettor->id, 'main_balance' => 1000]);
+        $betting->placeBet($walaBettor, $fight, 'wala', 100);
+        $fight->update(['status' => 'closed']);
+        $betting->settleBets($fight, 'meron');
+        $betting->redeemTicket($ticket->ticket_code, $teller, $shift);
+
+        $response = $this->actingAs($teller)->postJson(route('teller.tickets.quickRedeem'), [
+            'code' => $ticket->ticket_code,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJson(['success' => false, 'message' => __('This ticket has already been redeemed.')]);
+    }
+
+    public function test_quick_redeem_without_an_open_shift_returns_a_redirect_payload(): void
+    {
+        $teller = $this->teller();
+        $fight = $this->fight();
+
+        $response = $this->actingAs($teller)->postJson(route('teller.tickets.quickRedeem'), [
+            'code' => '0000000001',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJson(['success' => false, 'redirect' => route('teller.shift.start')]);
     }
 }

@@ -9,6 +9,9 @@
         'networkErrorVoid' => __('Network error — could not void this ticket.'),
         'couldNotWrite' => __('Could not write the ticket.'),
         'networkErrorWrite' => __('Network error — could not write the ticket.'),
+        'couldNotRedeem' => __('Could not redeem that ticket.'),
+        'networkErrorRedeem' => __('Network error — could not redeem that ticket.'),
+        'paidOut' => __('Paid out :amount for ticket :code.', ['amount' => $theme['currency'].':amount', 'code' => ':code']),
     ];
 @endphp
 
@@ -38,12 +41,12 @@
             </div>
 
             <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
-                <h2 class="font-semibold mb-3">{{ __('Redeem a winning ticket') }}</h2>
-                <form method="POST" action="{{ route('teller.tickets.lookup') }}" class="flex gap-2">
-                    @csrf
-                    <input type="text" name="code" required placeholder="{{ __('e.g. 0000000007') }}"
+                <h2 class="font-semibold mb-1">{{ __('Redeem a winning ticket') }}</h2>
+                <p class="text-xs text-slate-500 mb-3">{{ __('Scan the QR with a handheld scanner or type the code, then press Enter — pays out and prints the receipt right away.') }}</p>
+                <form id="redeem-form" class="flex gap-2">
+                    <input type="text" id="redeem-code-input" name="code" required autocomplete="off" placeholder="{{ __('e.g. 0000000007') }}"
                            class="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 uppercase">
-                    <button class="rounded-lg bg-red-600 hover:bg-red-500 transition font-semibold px-4 py-2">{{ __('Go') }}</button>
+                    <button id="redeem-submit-btn" class="rounded-lg bg-red-600 hover:bg-red-500 transition font-semibold px-4 py-2 disabled:opacity-50">{{ __('Pay Out') }}</button>
                 </form>
             </div>
         </div>
@@ -269,6 +272,12 @@
         modalContent.innerHTML = html;
         modal.classList.remove('hidden');
 
+        // _payout_receipt.blade.php ships without .print-active (it's
+        // normally toggled on/off by show.blade.php's printOnly(), since
+        // that page can hold two printables at once) — here the modal
+        // only ever holds one printable, so it always prints.
+        modalContent.querySelector('.printable')?.classList.add('print-active');
+
         // Auto-print the instant the receipt is on screen — a short delay
         // lets the QR SVG finish painting first.
         setTimeout(() => window.print(), 150);
@@ -372,6 +381,63 @@
             if (voidBtn) openVoidModal(voidBtn.dataset.code);
         });
     }
+
+    // Fast counter-redeem: scan the ticket's QR with a handheld scanner
+    // (it types the decoded code into this field and "presses" Enter) or
+    // type the code by hand — either way this submits the form. One round
+    // trip pays the ticket out and returns the payout receipt, which goes
+    // straight into the same modal/auto-print used for writing a ticket.
+    // No navigation to the ticket's own show page.
+    const redeemForm = document.getElementById('redeem-form');
+    const redeemCodeInput = document.getElementById('redeem-code-input');
+    const redeemSubmitBtn = document.getElementById('redeem-submit-btn');
+    const quickRedeemUrl = @json(route('teller.tickets.quickRedeem'));
+
+    function resetForNextRedeem() {
+        redeemForm.reset();
+        redeemCodeInput.focus();
+    }
+
+    redeemForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const code = redeemCodeInput.value.trim();
+        if (!code) return;
+
+        hideBanners();
+        redeemSubmitBtn.disabled = true;
+        redeemCodeInput.disabled = true;
+
+        fetch(quickRedeemUrl, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+            body: JSON.stringify({ code }),
+        })
+            .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                redeemSubmitBtn.disabled = false;
+                redeemCodeInput.disabled = false;
+
+                if (!ok || !data.success) {
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                        return;
+                    }
+                    showError(data.message || i18n.couldNotRedeem);
+                    redeemCodeInput.select();
+                    return;
+                }
+
+                showSuccess(i18n.paidOut.replace(':amount', data.payout).replace(':code', data.ticket_code));
+                showReceipt(data.receipt_html, resetForNextRedeem);
+            })
+            .catch(() => {
+                redeemSubmitBtn.disabled = false;
+                redeemCodeInput.disabled = false;
+                showError(i18n.networkErrorRedeem);
+                redeemCodeInput.select();
+            });
+    });
 
     // Side is chosen by tapping a MERON/WALA/DRAW panel (mirrors the player
     // betting UI) rather than a separate dropdown. The bet is written via

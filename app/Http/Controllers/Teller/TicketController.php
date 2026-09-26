@@ -293,6 +293,47 @@ class TicketController extends Controller
         return redirect()->route('teller.tickets.show', $bet);
     }
 
+    /**
+     * The fast counter-redeem path: scan the ticket's QR with a handheld
+     * scanner (which types the decoded URL into the code field like a
+     * keyboard, then "presses" Enter — see ScannedCode::extract()) or type
+     * the code by hand, and get paid out in one round trip. No detour
+     * through the ticket's own show page — just a pass/fail result and,
+     * on a win, the payout receipt to print immediately.
+     */
+    public function quickRedeem(Request $request): JsonResponse
+    {
+        $data = $request->validate(['code' => 'required|string']);
+
+        $shift = $this->shiftService->currentShift(auth()->user());
+        if (! $shift) {
+            return response()->json([
+                'success' => false,
+                'message' => __('Start your shift before paying out a ticket.'),
+                'redirect' => route('teller.shift.start'),
+            ], 422);
+        }
+
+        $raw = ScannedCode::extract($data['code']);
+        $code = ctype_digit($raw) ? str_pad($raw, 10, '0', STR_PAD_LEFT) : strtoupper($raw);
+
+        try {
+            $bet = $this->bettingService->redeemTicket($code, auth()->user(), $shift);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        $bet->load('fight.event.game', 'redeemedByTeller');
+
+        return response()->json([
+            'success' => true,
+            'ticket_code' => $bet->ticket_code,
+            'side' => $bet->fight->event->sideLabel($bet->side),
+            'payout' => number_format((float) $bet->payout, 2),
+            'receipt_html' => view('teller.tickets._payout_receipt', ['bet' => $bet])->render(),
+        ]);
+    }
+
     public function show(Bet $bet): View
     {
         abort_unless($bet->isCounterBet(), 404);
