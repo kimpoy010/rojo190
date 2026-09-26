@@ -47,7 +47,7 @@ class CombinedBetController extends Controller
         $myUnmatchedBets = $myBets->where('unmatched_amount', '>', 0);
 
         [$poolTotals, $payouts] = $this->poolTotals($fight, $game);
-        $tierTotals = $this->tierTotals($fight);
+        $tierTotals = $this->tierTotals($fight, $oddsTiers);
 
         $myMeronPool = (float) $myBets->where('side', 'meron')->whereNull('odds_tier_id')->sum('amount');
         $myWalaPool = (float) $myBets->where('side', 'wala')->whereNull('odds_tier_id')->sum('amount');
@@ -89,9 +89,10 @@ class CombinedBetController extends Controller
     {
         $fresh = $fight->fresh();
         $game = $fresh->event->game;
+        $oddsTiers = $this->tiersForEvent($fresh->event);
 
         [$poolTotals, $payouts] = $this->poolTotals($fresh, $game);
-        $tierTotals = $this->tierTotals($fresh);
+        $tierTotals = $this->tierTotals($fresh, $oddsTiers);
 
         $drawPool = (float) Bet::where('fight_id', $fresh->id)
             ->where('side', 'draw')
@@ -208,22 +209,42 @@ class CombinedBetController extends Controller
     }
 
     /**
-     * @return array<int, array{meron: float, wala: float}>
+     * Per-tier totals plus how much stake is available to match
+     * immediately on the OPPOSITE side right now — e.g. at a 10-9 tier
+     * with $100 unmatched on meron, a wala bettor sees "Avail: $90"
+     * (100 * 9/10), the same capacity conversion matchBet() itself uses
+     * to decide how much of a new bet actually matches.
+     *
+     * @return array<int, array{meron: float, wala: float, meron_avail: float, wala_avail: float}>
      */
-    private function tierTotals(Fight $fight): array
+    private function tierTotals(Fight $fight, \Illuminate\Support\Collection $oddsTiers): array
     {
-        return Bet::where('fight_id', $fight->id)
+        $rows = Bet::where('fight_id', $fight->id)
             ->whereNotNull('odds_tier_id')
             ->whereIn('side', ['meron', 'wala'])
             ->whereNotIn('status', ['refunded', 'cancelled'])
-            ->selectRaw('odds_tier_id, side, SUM(matched_amount + unmatched_amount) as total')
+            ->selectRaw('odds_tier_id, side, SUM(matched_amount + unmatched_amount) as total, SUM(unmatched_amount) as unmatched')
             ->groupBy('odds_tier_id', 'side')
             ->get()
-            ->groupBy('odds_tier_id')
-            ->map(fn ($rows) => [
-                'meron' => (float) ($rows->firstWhere('side', 'meron')?->total ?? 0),
-                'wala' => (float) ($rows->firstWhere('side', 'wala')?->total ?? 0),
-            ])
-            ->toArray();
+            ->groupBy('odds_tier_id');
+
+        $tiersById = $oddsTiers->keyBy('id');
+
+        return $rows->map(function ($tierRows, $tierId) use ($tiersById) {
+            $tier = $tiersById->get($tierId);
+            $meronUnmatched = (float) ($tierRows->firstWhere('side', 'meron')?->unmatched ?? 0);
+            $walaUnmatched = (float) ($tierRows->firstWhere('side', 'wala')?->unmatched ?? 0);
+            $meronRatio = $tier ? (float) $tier->meron_ratio : 1.0;
+            $walaRatio = $tier ? (float) $tier->wala_ratio : 1.0;
+
+            return [
+                'meron' => (float) ($tierRows->firstWhere('side', 'meron')?->total ?? 0),
+                'wala' => (float) ($tierRows->firstWhere('side', 'wala')?->total ?? 0),
+                // How much of a NEW bet on this side would match immediately
+                // against the opposite side's existing unmatched stake.
+                'meron_avail' => $walaRatio > 0 ? round($walaUnmatched * ($meronRatio / $walaRatio), 2) : 0.0,
+                'wala_avail' => $meronRatio > 0 ? round($meronUnmatched * ($walaRatio / $meronRatio), 2) : 0.0,
+            ];
+        })->toArray();
     }
 }

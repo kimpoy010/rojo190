@@ -79,18 +79,20 @@
         <div id="odds-tier-rows" class="divide-y divide-slate-800">
             @forelse ($oddsTiers as $tier)
                 @php
-                    $t = $tierTotals[$tier->id] ?? ['meron' => 0, 'wala' => 0];
+                    $t = $tierTotals[$tier->id] ?? ['meron' => 0, 'wala' => 0, 'meron_avail' => 0, 'wala_avail' => 0];
                     $mine = fn ($side) => $myTierBets[$tier->id.'-'.$side] ?? 0;
                 @endphp
                 <div class="grid grid-cols-3 items-center text-center px-2 py-2.5" data-tier-row="{{ $tier->id }}">
                     <button type="button" class="place-odds-bet flex flex-col items-center gap-0.5" data-side="meron" data-tier="{{ $tier->id }}">
                         <span class="text-red-400 font-bold text-sm" data-tier-total="meron">{{ number_format($t['meron'], 0) }}</span>
                         <span class="text-[10px] text-slate-500" data-tier-mine="meron">{{ __('Mine: :amount', ['amount' => number_format($mine('meron'), 0)]) }}</span>
+                        <span class="text-[10px] text-emerald-400" data-tier-avail="meron" @if (($t['meron_avail'] ?? 0) <= 0) hidden @endif>{{ __('Avail: :amount', ['amount' => number_format($t['meron_avail'] ?? 0, 0)]) }}</span>
                     </button>
                     <span class="text-white font-extrabold text-xs">{{ rtrim(rtrim((string) $tier->meron_ratio, '0'), '.') }}-{{ rtrim(rtrim((string) $tier->wala_ratio, '0'), '.') }}</span>
                     <button type="button" class="place-odds-bet flex flex-col items-center gap-0.5" data-side="wala" data-tier="{{ $tier->id }}">
                         <span class="text-blue-400 font-bold text-sm" data-tier-total="wala">{{ number_format($t['wala'], 0) }}</span>
                         <span class="text-[10px] text-slate-500" data-tier-mine="wala">{{ __('Mine: :amount', ['amount' => number_format($mine('wala'), 0)]) }}</span>
+                        <span class="text-[10px] text-emerald-400" data-tier-avail="wala" @if (($t['wala_avail'] ?? 0) <= 0) hidden @endif>{{ __('Avail: :amount', ['amount' => number_format($t['wala_avail'] ?? 0, 0)]) }}</span>
                     </button>
                 </div>
             @empty
@@ -316,6 +318,14 @@
             if (!row) return;
             row.querySelector('[data-tier-total="meron"]').textContent = fmt(totals.meron);
             row.querySelector('[data-tier-total="wala"]').textContent = fmt(totals.wala);
+
+            ['meron', 'wala'].forEach((side) => {
+                const availEl = row.querySelector(`[data-tier-avail="${side}"]`);
+                if (!availEl) return;
+                const avail = Number(totals[side + '_avail'] || 0);
+                availEl.hidden = avail <= 0;
+                if (avail > 0) availEl.textContent = '{{ __('Avail:') }} ' + fmt(avail);
+            });
         });
 
         if (['declared', 'cancelled'].includes(data.status)) {
