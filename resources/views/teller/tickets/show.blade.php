@@ -64,13 +64,14 @@
         window.print();
     }
 
-    @if (session('justRedeemed'))
-        // Landed here straight off the "Pay Out" action — auto-print the
-        // payout receipt the same way the write-ticket flow auto-prints
-        // the claim ticket, so the teller doesn't have to click the
-        // "Print payout receipt" button separately. Only fires on this
-        // one redirect (session('justRedeemed') is a one-time flash, not
-        // set on a later plain view of an already-redeemed ticket).
+    @if (request()->query('paid'))
+        // Landed here straight off the "Pay Out" action (?paid=1 on this
+        // exact redirect — see TicketController::redeem()) — auto-print
+        // the payout receipt the same way the write-ticket flow auto-
+        // prints the claim ticket, so the teller doesn't have to click
+        // "Print payout receipt" separately. Reloading or revisiting this
+        // same ticket later has no ?paid=1 in the URL, so it won't
+        // reprint on its own.
         window.addEventListener('load', function () {
             setTimeout(function () { printOnly('printable-receipt'); }, 150);
         });

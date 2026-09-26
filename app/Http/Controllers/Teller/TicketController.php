@@ -311,9 +311,16 @@ class TicketController extends Controller
             return redirect()->route('teller.tickets.show', $bet)->with('error', $e->getMessage());
         }
 
-        // justRedeemed drives show.blade.php's one-time auto-print of the
+        // ?paid=1 drives show.blade.php's one-time auto-print of the
         // payout receipt — only on the redirect right after paying out,
-        // never on a later plain view of an already-redeemed ticket.
-        return redirect()->route('teller.tickets.show', $bet)->with('success', __('Paid out — ticket redeemed.'))->with('justRedeemed', true);
+        // never on a later plain view of an already-redeemed ticket. A
+        // query param rather than a session flash: flash data shares one
+        // session-store race window with anything else touching the
+        // session around the same moment (a wallet-balance poll, a
+        // websocket subscription's own request), so it's not reliably
+        // there by the time this page's own request reads it. The URL is
+        // exactly this one response's own request — nothing else can
+        // race it.
+        return redirect()->route('teller.tickets.show', ['bet' => $bet, 'paid' => 1])->with('success', __('Paid out — ticket redeemed.'));
     }
 }
