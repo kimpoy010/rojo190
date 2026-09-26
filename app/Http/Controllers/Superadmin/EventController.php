@@ -20,7 +20,7 @@ class EventController extends Controller
     {
         $games = Game::orderBy('display_name')->get();
         $cockpitPresets = CockpitPreset::orderBy('name')->get();
-        $oddsTiers = OddsTier::where('is_active', true)->orderBy('label')->get();
+        $oddsTiers = OddsTier::where('is_active', true)->orderBy('display_order')->orderBy('label')->get();
 
         return view('superadmin.events.create', compact('games', 'cockpitPresets', 'oddsTiers'));
     }
@@ -78,7 +78,7 @@ class EventController extends Controller
     public function edit(Event $event): View
     {
         $cockpitPresets = CockpitPreset::orderBy('name')->get();
-        $oddsTiers = OddsTier::where('is_active', true)->orderBy('label')->get();
+        $oddsTiers = OddsTier::where('is_active', true)->orderBy('display_order')->orderBy('label')->get();
         $event->loadMissing('game', 'oddsTiers');
 
         return view('superadmin.events.edit', compact('event', 'cockpitPresets', 'oddsTiers'));

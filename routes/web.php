@@ -227,6 +227,7 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('superadmin')->name('supe
 
     Route::get('/odds-tiers', [OddsTierController::class, 'index'])->name('odds-tiers.index');
     Route::post('/odds-tiers', [OddsTierController::class, 'store'])->name('odds-tiers.store');
+    Route::post('/odds-tiers/reorder', [OddsTierController::class, 'reorder'])->name('odds-tiers.reorder');
     Route::put('/odds-tiers/{oddsTier}', [OddsTierController::class, 'update'])->name('odds-tiers.update');
     Route::delete('/odds-tiers/{oddsTier}', [OddsTierController::class, 'destroy'])->name('odds-tiers.destroy');
 

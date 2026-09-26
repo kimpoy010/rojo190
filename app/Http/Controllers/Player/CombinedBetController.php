@@ -181,7 +181,7 @@ class CombinedBetController extends Controller
     {
         $assigned = $event->oddsTiers;
 
-        return $assigned->isNotEmpty() ? $assigned : OddsTier::where('is_active', true)->get();
+        return $assigned->isNotEmpty() ? $assigned : OddsTier::where('is_active', true)->orderBy('display_order')->orderBy('label')->get();
     }
 
     private function poolTotals(Fight $fight, $game): array

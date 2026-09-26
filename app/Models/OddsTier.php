@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class OddsTier extends Model
 {
-    protected $fillable = ['label', 'meron_ratio', 'wala_ratio', 'is_active'];
+    protected $fillable = ['label', 'meron_ratio', 'wala_ratio', 'is_active', 'display_order'];
 
     protected function casts(): array
     {

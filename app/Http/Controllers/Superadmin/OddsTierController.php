@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OddsTier;
 use App\Support\AuditLogger;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -17,7 +18,7 @@ class OddsTierController extends Controller
 {
     public function index(): View
     {
-        $oddsTiers = OddsTier::orderBy('label')->get();
+        $oddsTiers = OddsTier::orderBy('display_order')->orderBy('label')->get();
 
         return view('superadmin.odds-tiers.index', compact('oddsTiers'));
     }
@@ -33,6 +34,9 @@ class OddsTierController extends Controller
         $tier = OddsTier::create([
             ...$data,
             'is_active' => true,
+            // New tiers land at the end of the list, not mixed into the
+            // middle of whatever order was already arranged.
+            'display_order' => (int) (OddsTier::max('display_order') ?? -1) + 1,
         ]);
 
         AuditLogger::log(
@@ -63,6 +67,31 @@ class OddsTierController extends Controller
         );
 
         return redirect()->route('superadmin.odds-tiers.index')->with('success', __('Odds tier updated.'));
+    }
+
+    /**
+     * Persist a drag-and-drop reorder of the odds tier list (see the
+     * index view's handle drag script) — drives both this admin page's
+     * own order and the fallback tier list any CombinedSabong event
+     * without a custom event_odds_tiers assignment uses.
+     */
+    public function reorder(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:odds_tiers,id',
+        ]);
+
+        foreach (array_values($data['ids']) as $order => $id) {
+            OddsTier::where('id', $id)->update(['display_order' => $order]);
+        }
+
+        AuditLogger::log(
+            action: 'odds_tier.reordered',
+            description: __('Odds tiers reordered.'),
+        );
+
+        return response()->json(['success' => true]);
     }
 
     public function destroy(OddsTier $oddsTier): RedirectResponse
