@@ -1,0 +1,27 @@
+; Runs Laravel Reverb (the WebSocket server) as a systemd service on its
+; own dedicated instance — see infra/terraform/ec2_reverb.tf. Installed at
+; /etc/systemd/system/reverb.service by user_data/reverb.sh.tpl.
+;
+; Not run under Supervisor (unlike deploy/supervisor/laravel-worker.conf,
+; which this app no longer needs — every broadcast is sent inline, see
+; app/Events/*.php's ShouldBroadcastNow) — this instance's only job is
+; Reverb itself, so plain systemd is enough; no multi-process pool to
+; manage the way the old queue-worker config needed.
+[Unit]
+Description=Laravel Reverb WebSocket server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/offline-bets
+ExecStart=/usr/bin/php artisan reverb:start --host=0.0.0.0 --port=8080
+Restart=always
+RestartSec=3
+; Reverb holds thousands of concurrent connections open — the default
+; per-process file-descriptor limit (1024 on most distros) would cap
+; concurrency far below what a c6i.large should otherwise handle.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

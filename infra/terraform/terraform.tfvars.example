@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored —
+# never commit real values (especially ssh_allowed_cidr if you narrow it
+# to something identifying, and definitely never any credentials).
+
+# Required — app_repo_url is a private repo. Create a fine-grained PAT at
+# https://github.com/settings/personal-access-tokens/new scoped to just
+# this repo, Contents: Read-only, and paste it here.
+github_token = "github_pat_..."
+
+# domain_name = "poolsabong.mx"
+# manage_dns  = true
+# ssh_allowed_cidr = "203.0.113.4/32"
+
+# Bump these once real load numbers come in from the k6 stress test:
+# app_asg_desired_capacity = 2
+# app_instance_type        = "c6i.xlarge"

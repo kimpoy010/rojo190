@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored.
+
+ssh_allowed_cidr = "203.0.113.4/32" # your office/home IP, /32
+
+# Required — app_repo_url is a private repo. Same token as infra/terraform,
+# or a fresh one — either works as long as it can read the repo.
+github_token = "github_pat_..."
+
+# Bump if 8 vCPU isn't enough headroom at your target VU count:
+# instance_type = "c6i.4xlarge"

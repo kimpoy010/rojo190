@@ -1,0 +1,94 @@
+@import 'tailwindcss';
+@import 'flatpickr/dist/themes/dark.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* Thin, dark-theme-matched scrollbar for any internal overflow container
+   (Reglahan's horizontal scroll, the PiP stack's vertical tile list, etc.)
+   — the browser default scrollbar reads as visually broken against the
+   slate/black player UI. */
+.scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* The QR SVG is generated with fixed pixel width/height attributes (see
+   QrCodeGenerator), so without this it never shrinks to fit its container —
+   on an 80mm print (~286px usable, once padding is subtracted) that clips
+   the right edge of a 300px-wide code and leaves it unscannable. The SVG
+   already carries a matching viewBox, so constraining it to the container's
+   width and letting height follow scales it down proportionally. */
+.printable svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Ticket printing: only the .printable.print-active element (and its
+   children) renders — the dark app chrome, nav, and any other page content
+   are hidden so a browser "print" produces just that one slip, sized for
+   an 80mm thermal receipt roll. A page can carry more than one .printable
+   (e.g. the original ticket and its payout receipt on the same lookup
+   page) — .print-active picks out which one this particular print is for;
+   see printOnly() in show.blade.php. Pages with only one .printable mark
+   it active by default so their existing "print" buttons need no JS. */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    .printable.print-active,
+    .printable.print-active * {
+        visibility: visible;
+    }
+    .printable.print-active {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 80mm;
+        margin: 0;
+        padding: 8px;
+    }
+}
+
+/* Retint flatpickr's dark theme (blue accent by default) to match this
+   app's red accent everywhere else — every date-range filter uses the same
+   picker, so this is the one place that needs to change. */
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected:hover,
+.flatpickr-day.startRange:hover,
+.flatpickr-day.endRange:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+.flatpickr-day.inRange {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: transparent;
+    box-shadow: -5px 0 0 rgba(220, 38, 38, 0.15), 5px 0 0 rgba(220, 38, 38, 0.15);
+}
+.flatpickr-day.today {
+    border-color: #dc2626;
+}
+.flatpickr-day:hover {
+    background: rgba(220, 38, 38, 0.25);
+}
