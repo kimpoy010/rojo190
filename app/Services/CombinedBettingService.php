@@ -393,6 +393,12 @@ class CombinedBettingService
 
         if ($winner === 'draw') {
             $poolBetsQuery()->with('user.wallet')->lockForUpdate()->get()->each(function (Bet $bet) use ($fight) {
+                if ($bet->isCounterBet()) {
+                    $bet->update(['status' => 'settled', 'payout' => $bet->amount]);
+
+                    return;
+                }
+
                 $this->walletService->creditBet(
                     $bet->user->wallet,
                     $bet->amount,
@@ -418,6 +424,12 @@ class CombinedBettingService
         // rake, no commission — the odds subset is unaffected.
         if ($payoutRatio < 1.0) {
             $poolBetsQuery()->with('user.wallet')->lockForUpdate()->get()->each(function (Bet $bet) use ($fight) {
+                if ($bet->isCounterBet()) {
+                    $bet->update(['status' => 'refunded', 'payout' => $bet->amount]);
+
+                    return;
+                }
+
                 $this->walletService->creditBet(
                     $bet->user->wallet,
                     $bet->amount,
@@ -447,6 +459,17 @@ class CombinedBettingService
 
         foreach ($winningBets as $bet) {
             $payout = (int) floor($bet->amount * $payoutRatio);
+
+            if ($bet->isCounterBet()) {
+                // No wallet to credit — a counter/ticket bet has no
+                // player account. The ticket becomes redeemable in cash
+                // at the counter instead, same as pool-sabong's own
+                // counter bets (see BettingService::settleMeronOrWala).
+                $bet->update(['status' => 'settled', 'payout' => $payout]);
+
+                continue;
+            }
+
             $this->walletService->creditBet(
                 $bet->user->wallet,
                 $payout,
@@ -605,7 +628,12 @@ class CombinedBettingService
 
         $drawBets = $drawBetsQuery()->with('user.wallet')->lockForUpdate()->get();
 
-        $totalDrawPaid = (int) $drawBets->sum(fn ($b) => floor($b->amount * $multiplier));
+        // Counter-bet tickets share the same multiplier but are paid in
+        // cash on redemption, not from the admin wallet, so they're
+        // excluded from the funding debit — that cash already left the
+        // teller's drawer the moment the ticket is redeemed.
+        $totalDrawPaid = (int) $drawBets->filter(fn ($b) => ! $b->isCounterBet())
+            ->sum(fn ($b) => floor($b->amount * $multiplier));
 
         if ($totalDrawPaid > 0) {
             $admin = User::role('superadmin')->first();
@@ -622,6 +650,13 @@ class CombinedBettingService
 
         foreach ($drawBets as $bet) {
             $payout = (int) floor($bet->amount * $multiplier);
+
+            if ($bet->isCounterBet()) {
+                $bet->update(['status' => 'settled', 'payout' => $payout]);
+
+                continue;
+            }
+
             $this->walletService->creditBet(
                 $bet->user->wallet,
                 $payout,
@@ -730,11 +765,25 @@ class CombinedBettingService
         DB::transaction(function () use ($fight) {
             $bets = Bet::where('fight_id', $fight->id)
                 ->whereNotIn('status', ['refunded', 'cancelled'])
+                ->where(function ($q) {
+                    // Skip a counter bet already redeemed at the full
+                    // refund amount — nothing left to give back.
+                    $q->whereNull('user_id')->whereNull('redeemed_at')
+                        ->orWhereNotNull('user_id');
+                })
                 ->lockForUpdate()
                 ->with('user.wallet')
                 ->get();
 
             foreach ($bets as $bet) {
+                if ($bet->isCounterBet()) {
+                    // No wallet to credit — the stake becomes redeemable
+                    // in cash at the counter instead.
+                    $bet->update(['status' => 'settled', 'payout' => $bet->amount]);
+
+                    continue;
+                }
+
                 $this->walletService->creditBet(
                     $bet->user->wallet,
                     $bet->amount,
@@ -761,6 +810,7 @@ class CombinedBettingService
         DB::transaction(function () use ($fight) {
             $settledBets = Bet::where('fight_id', $fight->id)
                 ->where('payout', '>', 0)
+                ->whereNotNull('user_id')
                 ->lockForUpdate()
                 ->with('user.wallet')
                 ->get();

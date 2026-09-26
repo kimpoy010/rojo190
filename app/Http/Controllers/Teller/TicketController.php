@@ -195,11 +195,20 @@ class TicketController extends Controller
 
     /**
      * The single event the declarator currently has live — the bet-writer
-     * flow has no per-teller event picker, it always writes against this one.
+     * flow has no per-teller event picker, it always writes against this
+     * one. Restricted to a non-combined game: counter/ticket betting has
+     * no support in CombinedBettingService (no odds_tier_id/matched/
+     * unmatched semantics, no ticket redemption path for it) — writing
+     * one against a combined fight crashes settlement later. If the only
+     * live event right now is a combined one, the bet-writer simply has
+     * nothing to write against, same as if nothing were live at all.
      */
     private function activeEvent(): ?Event
     {
-        return Event::where('status', 'live')->latest('id')->first();
+        return Event::where('status', 'live')
+            ->whereHas('game', fn ($q) => $q->where(fn ($qq) => $qq->whereNull('game_type')->orWhere('game_type', '!=', 'combined')))
+            ->latest('id')
+            ->first();
     }
 
     public function receipt(Request $request, Bet $bet): View|JsonResponse
