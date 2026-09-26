@@ -75,6 +75,10 @@ class EventController extends Controller
             return redirect()->route('play.index')->with('info', __('No fight is currently in progress for that event.'));
         }
 
+        if ($event->game?->isCombined()) {
+            return redirect()->route('play.combined-fight', $fight);
+        }
+
         return redirect()->route('play.pool-fight', $fight);
     }
 }

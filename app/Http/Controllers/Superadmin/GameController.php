@@ -35,6 +35,7 @@ class GameController extends Controller
             'draw_multiplier' => 'required|numeric|min:0',
             'max_draw_bet' => 'required|numeric|min:0',
             'min_payout_threshold' => 'required|numeric|min:0',
+            ...($game->isCombined() ? ['odds_plasada' => 'required|numeric|min:0|max:100'] : []),
         ]);
 
         $data['video_enabled'] = $request->boolean('video_enabled');

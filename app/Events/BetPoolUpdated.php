@@ -25,6 +25,10 @@ class BetPoolUpdated implements ShouldBroadcastNow
         // total).
         public readonly ?float $meronPayoutPct = null,
         public readonly ?float $walaPayoutPct = null,
+        // CombinedSabong only: per-odds-tier totals, keyed by odds_tier_id
+        // -> ['meron' => float, 'wala' => float]. Always empty for every
+        // other game, which never passes this argument at all.
+        public readonly array $tierTotals = [],
     ) {}
 
     public function broadcastOn(): array
@@ -49,6 +53,7 @@ class BetPoolUpdated implements ShouldBroadcastNow
             'meron_payout_pct' => $this->meronPayoutPct,
             'wala_payout_pct' => $this->walaPayoutPct,
             'latest_bet' => $this->latestBet,
+            'tier_totals' => $this->tierTotals,
         ];
     }
 }

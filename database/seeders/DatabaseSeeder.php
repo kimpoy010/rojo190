@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             RolesAndUsersSeeder::class,
             DemoStaffAndPlayersSeeder::class,
             GameSeeder::class,
+            OddsTierSeeder::class,
             AgentLevelSeeder::class,
             AgentDemoSeeder::class,
             SettingSeeder::class,

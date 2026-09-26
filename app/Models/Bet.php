@@ -15,7 +15,10 @@ class Bet extends Model
         'user_id',
         'fight_id',
         'side',
+        'odds_tier_id',
         'amount',
+        'matched_amount',
+        'unmatched_amount',
         'status',
         'payout',
         'placed_by_teller_id',
@@ -57,10 +60,22 @@ class Bet extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'matched_amount' => 'decimal:2',
+            'unmatched_amount' => 'decimal:2',
             'payout' => 'decimal:2',
             'redeemed_at' => 'datetime',
             'voided_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Set only for a CombinedSabong fixed-odds bet — the ratio it's
+     * matched against the opposing side at. Null for a pool bet (every
+     * bet on every other game, and draw bets on either game).
+     */
+    public function oddsTier(): BelongsTo
+    {
+        return $this->belongsTo(OddsTier::class);
     }
 
     /**

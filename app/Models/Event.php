@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -60,6 +61,20 @@ class Event extends Model
     public function fights(): HasMany
     {
         return $this->hasMany(Fight::class);
+    }
+
+    /**
+     * Which fixed-odds tiers this (CombinedSabong) event offers, in
+     * display order — superadmin-assigned. Empty for every non-combined
+     * event, and for a combined event that hasn't been configured yet
+     * (CombinedBettingService::placeBet() falls back to every globally
+     * active OddsTier in that case).
+     */
+    public function oddsTiers(): BelongsToMany
+    {
+        return $this->belongsToMany(OddsTier::class, 'event_odds_tiers')
+            ->withPivot('display_order')
+            ->orderBy('event_odds_tiers.display_order');
     }
 
     /**

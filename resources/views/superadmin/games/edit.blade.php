@@ -3,7 +3,7 @@
 @section('title', __('Edit game'))
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">{{ __('Pool-Sabong settings') }}</h1>
+<h1 class="text-2xl font-bold mb-6">{{ __(':name settings', ['name' => $game->display_name]) }}</h1>
 
 <form method="POST" action="{{ route('superadmin.games.update', $game) }}" enctype="multipart/form-data" class="max-w-lg space-y-4">
     @csrf
@@ -70,6 +70,14 @@
         <label class="block text-sm text-slate-400 mb-1">{{ __('Min payout warning threshold ($, display only)') }}</label>
         <input type="text" inputmode="decimal" name="min_payout_threshold" value="{{ old('min_payout_threshold', $game->min_payout_threshold) }}" class="amount-input w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
     </div>
+
+    @if ($game->isCombined())
+        <div class="rounded-lg border border-red-900/50 bg-red-950/20 p-3">
+            <label class="block text-sm text-slate-300 mb-1">{{ __('Odds (Fixed) Plasada') }}</label>
+            <p class="text-xs text-slate-500 mb-2">{{ __('House fee (%) on the odds/fixed-bet subset — independent of the Plasada above, which now only governs the Pool/Totalizer subset.') }}</p>
+            <input type="number" step="0.01" name="odds_plasada" value="{{ old('odds_plasada', $game->odds_plasada ?? $game->plasada) }}" class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
+        </div>
+    @endif
 
     <button class="rounded-lg bg-red-600 hover:bg-red-500 transition font-semibold px-6 py-2">{{ __('Save') }}</button>
 </form>

@@ -1,6 +1,16 @@
 {{-- Everything that changes as fights progress — re-rendered wholesale and
      swapped in by the parent view's refreshPanel() whenever a fight status
      changes anywhere in this event, instead of reloading the page. --}}
+@php
+    // CombinedSabong routes declare/cancel/redeclare through its own
+    // settlement service — every other game keeps today's routes
+    // unchanged. Nothing else on this panel (open/last-call/close/
+    // toggle-draw/cockpit/fight-number/bets) differs by game type.
+    $isCombined = $event->game?->isCombined() ?? false;
+    $declareRouteName = $isCombined ? 'declarator.combined-fights.declare' : 'declarator.fights.declare';
+    $cancelRouteName = $isCombined ? 'declarator.combined-fights.cancel' : 'declarator.fights.cancel';
+    $redeclareRouteName = $isCombined ? 'declarator.combined-fights.redeclare' : 'declarator.fights.redeclare';
+@endphp
 @if ($fights->isEmpty())
     <p class="text-slate-500">{{ __('No fights in progress. Start the event, or use "Start next fight" above, to create one.') }}</p>
 @else
@@ -72,6 +82,23 @@
                         </div>
                     </div>
 
+                    @if ($isCombined && ($row['oddsTierTotals'] ?? collect())->isNotEmpty())
+                        <div class="mb-4 rounded-lg border border-slate-800 overflow-hidden text-xs">
+                            <div class="grid grid-cols-3 bg-black/30 px-2 py-1 font-semibold text-slate-400">
+                                <span>{{ __('Meron') }}</span>
+                                <span>{{ __('Tier') }}</span>
+                                <span>{{ __('Wala') }}</span>
+                            </div>
+                            @foreach ($row['oddsTierTotals'] as $tierId => $totals)
+                                <div class="grid grid-cols-3 px-2 py-1 border-t border-slate-800">
+                                    <span class="text-red-400">{{ $theme['currency'] }}{{ number_format($totals['meron'], 2) }}</span>
+                                    <span class="text-slate-300">{{ $oddsTierLabels[$tierId] ?? $tierId }}</span>
+                                    <span class="text-sky-400">{{ $theme['currency'] }}{{ number_format($totals['wala'], 2) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
                     <div class="flex flex-wrap gap-2 fight-controls">
                         <form data-ajax method="POST" action="{{ route('declarator.fights.open', $fight) }}" class="fight-action w-full space-y-2" data-visible-when="pending">
                             @csrf
@@ -123,12 +150,12 @@
                             @csrf
                             <button class="rounded-lg bg-amber-600 hover:bg-amber-500 transition font-semibold px-4 py-2 text-sm">{{ __('Close bets') }}</button>
                         </form>
-                        <form data-ajax method="POST" action="{{ route('declarator.fights.declare', $fight) }}" class="fight-action" data-visible-when="closed">
+                        <form data-ajax method="POST" action="{{ route($declareRouteName, $fight) }}" class="fight-action" data-visible-when="closed">
                             @csrf
                             <input type="hidden" name="winner" value="meron">
                             <button class="rounded-lg {{ $theme['meron']['declare_btn'] }} transition font-semibold px-4 py-2 text-sm">{{ __('Declare :side', ['side' => $event->label_meron]) }}</button>
                         </form>
-                        <form data-ajax method="POST" action="{{ route('declarator.fights.declare', $fight) }}" class="fight-action" data-visible-when="closed">
+                        <form data-ajax method="POST" action="{{ route($declareRouteName, $fight) }}" class="fight-action" data-visible-when="closed">
                             @csrf
                             <input type="hidden" name="winner" value="wala">
                             <button class="rounded-lg {{ $theme['wala']['declare_btn'] }} transition font-semibold px-4 py-2 text-sm">{{ __('Declare :side', ['side' => $event->label_wala]) }}</button>
@@ -136,12 +163,12 @@
                         {{-- Always available to the declarator regardless of draw_enabled —
                              that flag only controls whether players could bet on a draw, not
                              whether the fight can actually end in one. --}}
-                        <form data-ajax method="POST" action="{{ route('declarator.fights.declare', $fight) }}" class="fight-action" data-visible-when="closed">
+                        <form data-ajax method="POST" action="{{ route($declareRouteName, $fight) }}" class="fight-action" data-visible-when="closed">
                             @csrf
                             <input type="hidden" name="winner" value="draw">
                             <button class="rounded-lg bg-emerald-600 hover:bg-emerald-500 transition font-semibold px-4 py-2 text-sm">{{ __('Declare :side', ['side' => $event->label_draw]) }}</button>
                         </form>
-                        <form data-ajax data-confirm="{{ __('Cancel this fight and refund all bets?') }}" method="POST" action="{{ route('declarator.fights.cancel', $fight) }}" class="fight-action" data-visible-when="pending,open,last_call,closed">
+                        <form data-ajax data-confirm="{{ __('Cancel this fight and refund all bets?') }}" method="POST" action="{{ route($cancelRouteName, $fight) }}" class="fight-action" data-visible-when="pending,open,last_call,closed">
                             @csrf
                             <button class="rounded-lg bg-slate-700 hover:bg-slate-600 transition font-semibold px-4 py-2 text-sm">{{ __('Cancel fight') }}</button>
                         </form>
@@ -191,7 +218,7 @@
                             <span>#{{ $past->fight_number }}</span>
                             <span class="capitalize">{{ $past->winner ? $event->sideLabel($past->winner) : __('cancelled') }}</span>
                             @if ($past->status === 'declared')
-                                <form data-ajax data-confirm="{{ __('Re-declare this fight? Existing payouts will be reversed.') }}" method="POST" action="{{ route('declarator.fights.redeclare', $past) }}" class="redeclare-form">
+                                <form data-ajax data-confirm="{{ __('Re-declare this fight? Existing payouts will be reversed.') }}" method="POST" action="{{ route($redeclareRouteName, $past) }}" class="redeclare-form">
                                     @csrf
                                     <select name="winner" class="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs">
                                         <option value="meron">{{ $event->label_meron }}</option>

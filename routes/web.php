@@ -8,8 +8,10 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Declarator\EventController as DeclaratorEventController;
 use App\Http\Controllers\Declarator\FightController as DeclaratorFightController;
+use App\Http\Controllers\Declarator\CombinedFightController as DeclaratorCombinedFightController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Player\CashController;
+use App\Http\Controllers\Player\CombinedBetController;
 use App\Http\Controllers\Player\EventController as PlayerEventController;
 use App\Http\Controllers\Player\PoolBetController;
 use App\Http\Controllers\Player\ProfileController as PlayerProfileController;
@@ -23,6 +25,7 @@ use App\Http\Controllers\Superadmin\EventController as SuperadminEventController
 use App\Http\Controllers\Superadmin\GameController;
 use App\Http\Controllers\Superadmin\IncomeReportController;
 use App\Http\Controllers\Superadmin\AuditLogController;
+use App\Http\Controllers\Superadmin\OddsTierController;
 use App\Http\Controllers\Superadmin\PinController;
 use App\Http\Controllers\Superadmin\SettingsController;
 use App\Http\Controllers\Superadmin\RfidTerminalController;
@@ -94,6 +97,11 @@ Route::middleware(['auth', 'role:player'])->prefix('play')->name('play.')->group
     Route::post('/fight/{fight}/bet', [PoolBetController::class, 'store'])->name('pool-bet')->middleware('throttle:30,1');
     Route::get('/bet-history', [PoolBetController::class, 'betHistory'])->name('bet-history');
 
+    Route::get('/combined-fight/{fight}', [CombinedBetController::class, 'show'])->name('combined-fight');
+    Route::get('/combined-fight/{fight}/status', [CombinedBetController::class, 'status'])->name('combined-fight.status');
+    Route::post('/combined-fight/{fight}/bet', [CombinedBetController::class, 'store'])->name('combined-bet')->middleware('throttle:30,1');
+    Route::post('/combined-fight/{fight}/bets/{bet}/cancel', [CombinedBetController::class, 'cancelBet'])->name('combined-cancel-bet')->middleware('throttle:30,1');
+
     Route::get('/wallet', [PlayerWalletController::class, 'index'])->name('wallet.index');
     Route::get('/profile', [PlayerProfileController::class, 'show'])->name('profile');
 
@@ -125,6 +133,13 @@ Route::middleware(['auth', 'role:declarator|superadmin'])->prefix('declarator')-
     Route::get('/fights/{fight}/bets', [DeclaratorFightController::class, 'bets'])->name('fights.bets');
     Route::post('/fights/{fight}/fight-number', [DeclaratorFightController::class, 'updateFightNumber'])->name('fights.fight-number');
     Route::post('/fights/{fight}/cockpit', [DeclaratorFightController::class, 'updateCockpit'])->name('fights.cockpit');
+
+    // CombinedSabong only — everything else about a fight's lifecycle
+    // (open/last-call/close/toggle-draw/cockpit/fight-number/bets above)
+    // is game-agnostic and shared as-is; only settlement differs.
+    Route::post('/combined-fights/{fight}/declare', [DeclaratorCombinedFightController::class, 'declare'])->name('combined-fights.declare');
+    Route::post('/combined-fights/{fight}/cancel', [DeclaratorCombinedFightController::class, 'cancel'])->name('combined-fights.cancel');
+    Route::post('/combined-fights/{fight}/redeclare', [DeclaratorCombinedFightController::class, 'redeclare'])->name('combined-fights.redeclare');
 });
 
 // Creating and editing an event (including its stream URL) is shared
@@ -208,6 +223,11 @@ Route::middleware(['auth', 'role:superadmin'])->prefix('superadmin')->name('supe
     Route::post('/cockpits', [CockpitController::class, 'store'])->name('cockpits.store');
     Route::put('/cockpits/{cockpit}', [CockpitController::class, 'update'])->name('cockpits.update');
     Route::delete('/cockpits/{cockpit}', [CockpitController::class, 'destroy'])->name('cockpits.destroy');
+
+    Route::get('/odds-tiers', [OddsTierController::class, 'index'])->name('odds-tiers.index');
+    Route::post('/odds-tiers', [OddsTierController::class, 'store'])->name('odds-tiers.store');
+    Route::put('/odds-tiers/{oddsTier}', [OddsTierController::class, 'update'])->name('odds-tiers.update');
+    Route::delete('/odds-tiers/{oddsTier}', [OddsTierController::class, 'destroy'])->name('odds-tiers.destroy');
 
     Route::get('/cockpit-presets', [CockpitPresetController::class, 'index'])->name('cockpit-presets.index');
     Route::post('/cockpit-presets', [CockpitPresetController::class, 'store'])->name('cockpit-presets.store');

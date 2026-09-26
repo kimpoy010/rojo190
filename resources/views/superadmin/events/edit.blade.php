@@ -61,6 +61,24 @@
         <label for="draw_enabled" class="text-sm text-slate-400">{{ __('Draw betting enabled') }}</label>
     </div>
 
+    @if ($event->game?->isCombined())
+        @php $selectedTierIds = old('odds_tier_ids', $event->oddsTiers->pluck('id')->all()); @endphp
+        <div>
+            <label class="block text-sm text-slate-400 mb-1">{{ __('Odds tiers offered (optional — leave all unchecked to offer every active tier)') }}</label>
+            <div class="grid grid-cols-3 gap-2">
+                @foreach ($oddsTiers as $tier)
+                    <label class="flex items-center gap-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5">
+                        <input type="checkbox" name="odds_tier_ids[]" value="{{ $tier->id }}" {{ in_array($tier->id, $selectedTierIds) ? 'checked' : '' }} class="rounded">
+                        {{ $tier->label }}
+                    </label>
+                @endforeach
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+                <a href="{{ route('superadmin.odds-tiers.index') }}" class="underline">{{ __('Manage odds tiers') }}</a>
+            </p>
+        </div>
+    @endif
+
     <button class="rounded-lg bg-red-600 hover:bg-red-500 transition font-semibold px-6 py-2">{{ __('Save changes') }}</button>
 </form>
 @endsection

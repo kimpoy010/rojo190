@@ -7,6 +7,7 @@ use App\Models\Bet;
 use App\Models\Cockpit;
 use App\Models\Event;
 use App\Models\Fight;
+use App\Models\OddsTier;
 use App\Services\FightService;
 use App\Support\PoolPayoutCalculator;
 use Illuminate\Contracts\View\View;
@@ -91,7 +92,25 @@ class EventController extends Controller
                 $game?->plasada_mode ?? 'total_pool'
             );
 
-            return ['fight' => $fight, 'poolTotals' => $poolTotals, 'payouts' => $payouts];
+            // CombinedSabong only — the odds-tier matched totals shown
+            // alongside the pool totals in the declarator card. Every
+            // other game's $row simply carries an empty array here.
+            $oddsTierTotals = $game?->isCombined()
+                ? Bet::where('fight_id', $fight->id)
+                    ->whereNotNull('odds_tier_id')
+                    ->whereIn('side', ['meron', 'wala'])
+                    ->whereNotIn('status', ['refunded', 'cancelled'])
+                    ->selectRaw('odds_tier_id, side, SUM(matched_amount + unmatched_amount) as total')
+                    ->groupBy('odds_tier_id', 'side')
+                    ->get()
+                    ->groupBy('odds_tier_id')
+                    ->map(fn ($rows) => [
+                        'meron' => (float) ($rows->firstWhere('side', 'meron')?->total ?? 0),
+                        'wala' => (float) ($rows->firstWhere('side', 'wala')?->total ?? 0),
+                    ])
+                : collect();
+
+            return ['fight' => $fight, 'poolTotals' => $poolTotals, 'payouts' => $payouts, 'oddsTierTotals' => $oddsTierTotals];
         });
 
         $fightHistory = $event->fights()
@@ -125,6 +144,7 @@ class EventController extends Controller
             'fightHistory' => $fightHistory,
             'cockpits' => $cockpits,
             'busyCockpits' => $busyCockpits,
+            'oddsTierLabels' => $event->game?->isCombined() ? OddsTier::pluck('label', 'id') : collect(),
         ];
     }
 

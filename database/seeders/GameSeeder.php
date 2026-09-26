@@ -21,5 +21,20 @@ class GameSeeder extends Seeder
                 'min_payout_threshold' => 130.00,
             ]
         );
+
+        Game::firstOrCreate(
+            ['game_name' => 'combined-sabong'],
+            [
+                'game_type' => 'combined',
+                'display_name' => 'Combined Sabong',
+                'game_status' => 'active',
+                'plasada' => 5.00,
+                'plasada_mode' => 'total_pool',
+                'odds_plasada' => 5.00,
+                'draw_multiplier' => 8.00,
+                'max_draw_bet' => 100.00,
+                'min_payout_threshold' => 130.00,
+            ]
+        );
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CockpitPreset;
 use App\Models\Event;
 use App\Models\Game;
+use App\Models\OddsTier;
 use App\Support\AuditLogger;
 use App\Support\GameTheme;
 use App\Support\ImageUpload;
@@ -17,17 +18,17 @@ class EventController extends Controller
 {
     public function create(): View
     {
-        $game = Game::where('game_name', 'pool-sabong')->firstOrFail();
+        $games = Game::orderBy('display_name')->get();
         $cockpitPresets = CockpitPreset::orderBy('name')->get();
+        $oddsTiers = OddsTier::where('is_active', true)->orderBy('label')->get();
 
-        return view('superadmin.events.create', compact('game', 'cockpitPresets'));
+        return view('superadmin.events.create', compact('games', 'cockpitPresets', 'oddsTiers'));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $game = Game::where('game_name', 'pool-sabong')->firstOrFail();
-
         $data = $request->validate([
+            'game_id' => 'required|integer|exists:games,id',
             'name' => 'required|string|max:255',
             'arena' => 'nullable|string|max:255',
             'date' => 'nullable|date',
@@ -36,8 +37,11 @@ class EventController extends Controller
             'draw_enabled' => 'sometimes|boolean',
             'multiplier' => 'nullable|numeric|min:0.01',
             'bet_limit' => 'nullable|numeric|min:0',
+            'odds_tier_ids' => 'sometimes|array',
+            'odds_tier_ids.*' => 'integer|exists:odds_tiers,id',
         ]);
 
+        $game = Game::findOrFail($data['game_id']);
         $theme = GameTheme::for($game->region);
 
         $event = Event::create([
@@ -58,6 +62,10 @@ class EventController extends Controller
             'label_draw' => $theme['draw']['label'],
         ]);
 
+        if ($game->isCombined()) {
+            $this->syncOddsTiers($event, $data['odds_tier_ids'] ?? []);
+        }
+
         AuditLogger::log(
             action: 'event.created',
             description: __('Event :name created.', ['name' => $event->name]),
@@ -70,8 +78,10 @@ class EventController extends Controller
     public function edit(Event $event): View
     {
         $cockpitPresets = CockpitPreset::orderBy('name')->get();
+        $oddsTiers = OddsTier::where('is_active', true)->orderBy('label')->get();
+        $event->loadMissing('game', 'oddsTiers');
 
-        return view('superadmin.events.edit', compact('event', 'cockpitPresets'));
+        return view('superadmin.events.edit', compact('event', 'cockpitPresets', 'oddsTiers'));
     }
 
     public function update(Request $request, Event $event): RedirectResponse
@@ -86,6 +96,8 @@ class EventController extends Controller
             'draw_enabled' => 'sometimes|boolean',
             'multiplier' => 'nullable|numeric|min:0.01',
             'bet_limit' => 'nullable|numeric|min:0',
+            'odds_tier_ids' => 'sometimes|array',
+            'odds_tier_ids.*' => 'integer|exists:odds_tiers,id',
         ]);
 
         $thumbnailUrl = $event->thumbnail_url;
@@ -128,6 +140,10 @@ class EventController extends Controller
                 ->update(['draw_enabled' => $drawEnabled]);
         }
 
+        if ($event->game?->isCombined()) {
+            $this->syncOddsTiers($event, $data['odds_tier_ids'] ?? []);
+        }
+
         $after = $event->fresh()->only(array_keys($before));
         $changes = [];
         foreach ($before as $field => $oldValue) {
@@ -144,5 +160,20 @@ class EventController extends Controller
         );
 
         return redirect()->route('declarator.events.show', $event)->with('success', __('Event updated.'));
+    }
+
+    /**
+     * CombinedSabong only — which odds tiers this event offers, in the
+     * order submitted. An empty selection is valid (falls back to every
+     * globally active tier — see CombinedBettingService::placeBet()).
+     */
+    private function syncOddsTiers(Event $event, array $oddsTierIds): void
+    {
+        $sync = [];
+        foreach (array_values($oddsTierIds) as $order => $tierId) {
+            $sync[$tierId] = ['display_order' => $order];
+        }
+
+        $event->oddsTiers()->sync($sync);
     }
 }
