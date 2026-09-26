@@ -42,6 +42,10 @@
         <p class="font-semibold">🎛️ {{ __('Cockpit Presets') }}</p>
         <p class="text-sm text-slate-500 mt-1">{{ __('Group cockpits to assign when creating an event.') }}</p>
     </a>
+    <a href="{{ route('superadmin.odds-tiers.index') }}" class="rounded-xl border border-slate-800 bg-slate-900 p-4 hover:border-red-600 transition">
+        <p class="font-semibold">🎲 {{ __('Odds Tiers') }}</p>
+        <p class="text-sm text-slate-500 mt-1">{{ __('Meron:Wala matching ratios for CombinedSabong.') }}</p>
+    </a>
     <a href="{{ route('superadmin.reports.income') }}" class="rounded-xl border border-slate-800 bg-slate-900 p-4 hover:border-red-600 transition">
         <p class="font-semibold">📊 {{ __('Income report') }}</p>
         <p class="text-sm text-slate-500 mt-1">{{ __('House income per fight — staked vs. paid out.') }}</p>
@@ -67,6 +71,21 @@
             <div><dt class="text-slate-500">{{ __('Mode') }}</dt><dd class="font-semibold">{{ $game->plasada_mode }}</dd></div>
             <div><dt class="text-slate-500">{{ __('Draw multiplier') }}</dt><dd class="font-semibold">{{ $game->draw_multiplier }}x</dd></div>
             <div><dt class="text-slate-500">{{ __('Max draw bet') }}</dt><dd class="font-semibold">{{ $game->theme()['currency'] }}{{ number_format($game->max_draw_bet, 0) }}</dd></div>
+        </dl>
+    </div>
+@endif
+
+@if ($combinedGame)
+    <div class="rounded-xl border border-slate-800 bg-slate-900 p-4 mb-8">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold">{{ __(':name settings', ['name' => $combinedGame->display_name]) }}</h2>
+            <a href="{{ route('superadmin.games.edit', $combinedGame) }}" class="text-sm text-red-400 hover:underline">{{ __('Edit') }}</a>
+        </div>
+        <dl class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div><dt class="text-slate-500">{{ __('Pool plasada') }}</dt><dd class="font-semibold">{{ $combinedGame->plasada }}%</dd></div>
+            <div><dt class="text-slate-500">{{ __('Odds plasada') }}</dt><dd class="font-semibold">{{ $combinedGame->odds_plasada ?? $combinedGame->plasada }}%</dd></div>
+            <div><dt class="text-slate-500">{{ __('Mode') }}</dt><dd class="font-semibold">{{ $combinedGame->plasada_mode }}</dd></div>
+            <div><dt class="text-slate-500">{{ __('Draw multiplier') }}</dt><dd class="font-semibold">{{ $combinedGame->draw_multiplier }}x</dd></div>
         </dl>
     </div>
 @endif
